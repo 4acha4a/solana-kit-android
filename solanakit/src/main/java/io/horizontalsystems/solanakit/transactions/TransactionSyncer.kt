@@ -338,7 +338,7 @@ fun mapTransactionInfoToEntity(info: TransactionInfo): Transaction {
         fee = lamportsToSol(feeLamports),
         from = from,
         to = to,
-        amount = lamportsToSol(amountLamports),
+        amount = BigDecimal(amountLamports!!),
         error = if (errStr == "null") null else errStr,
         pending = false,
         blockHash = recentBlockhash,
