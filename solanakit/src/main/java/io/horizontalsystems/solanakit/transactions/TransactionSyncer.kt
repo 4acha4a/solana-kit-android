@@ -30,6 +30,33 @@ import java.math.BigDecimal
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import kotlinx.coroutines.delay
+import kotlin.math.min
+import kotlin.random.Random
+
+private const val INTER_REQUEST_DELAY_MS = 150L      // ~6–10 req/s
+private const val MAX_ATTEMPTS_429 = 6
+private const val BASE_DELAY_429_MS = 300L
+private const val MAX_DELAY_429_MS = 10_000L
+
+private fun is429(t: Throwable): Boolean =
+    t.message?.contains("code=429", ignoreCase = true) == true ||
+            t.toString().contains("code=429", ignoreCase = true)
+
+private suspend fun <T> retry429(block: suspend () -> T): T {
+    var attempt = 0
+    var delayMs = BASE_DELAY_429_MS
+    while (true) {
+        try {
+            return block()
+        } catch (t: Throwable) {
+            if (!is429(t) || ++attempt >= MAX_ATTEMPTS_429) throw t
+            val jitter = Random.nextLong(0, delayMs / 2 + 1)
+            delay(delayMs + jitter)
+            delayMs = min(delayMs * 2, MAX_DELAY_429_MS)
+        }
+    }
+}
 
 interface ITransactionListener {
     fun onUpdateTransactionSyncState(syncState: SolanaKit.SyncState)
@@ -106,14 +133,27 @@ class TransactionSyncer(
 
     private suspend fun getTransactionsFromRpcSignatures(rpcSignatureInfos: List<SignatureInfo>): List<TransactionInfo> {
         val transactionObjects = mutableListOf<TransactionInfo>()
-        var transactionObjectsChunk = listOf<TransactionInfo>()
 
-        for (signatureInfo in rpcSignatureInfos) {
-            if (signatureInfo.err != null) continue
+        for (info in rpcSignatureInfos) {
+            if (info.err != null) continue
 
-            val transactionObject = getTransactionChunk(signatureInfo.signature) ?: continue
-            Log.d("solana-kit-tx", "Transaction object: $transactionObject")
-            transactionObjects.add(transactionObject)
+            val tx = try {
+                retry429 { getTransactionChunk(info.signature) }
+            } catch (t: Throwable) {
+                if (!is429(t)) {
+                    Log.w("solana-kit-tx", "Non-429 error for ${info.signature}: $t")
+                }
+                // Swallow on 429 (already retried) or any other error -> skip this sig
+                null
+            }
+
+            if (tx != null) {
+                Log.d("solana-kit-tx", "Transaction object: $tx")
+                transactionObjects.add(tx)
+            }
+
+            // Fixed spacing between RPC calls to avoid throttling
+            delay(INTER_REQUEST_DELAY_MS)
         }
 
         Log.d("solana-kit", "Total transactions fetched: ${transactionObjects.size}")
