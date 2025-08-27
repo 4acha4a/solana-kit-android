@@ -41,7 +41,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import org.sol4k.Base58
 import org.sol4k.Connection
@@ -52,6 +55,31 @@ import java.math.BigDecimal
 import java.time.Instant
 import java.util.Base64
 import java.util.Objects
+
+private const val UINT64_MAX_STR = "18446744073709551615"
+private const val LONG_MAX_STR = "9223372036854775807"
+
+class RentEpochClampInterceptor : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val req = chain.request()
+        val res = chain.proceed(req)
+
+        val mediaType = res.body?.contentType()
+        val bodyStr = res.body?.string() ?: return res
+
+        val patched = if (bodyStr.contains("\"rentEpoch\":$UINT64_MAX_STR")) {
+            bodyStr.replace("\"rentEpoch\":$UINT64_MAX_STR", "\"rentEpoch\":$LONG_MAX_STR")
+        } else bodyStr
+
+        val newBody = patched.toByteArray()
+            .let { ResponseBody.create(mediaType, it) }
+
+        return res.newBuilder()
+            .body(newBody)
+            .removeHeader("Content-Length")
+            .build()
+    }
+}
 
 class SolanaKit(
     private val apiSyncer: ApiSyncer,
@@ -292,6 +320,9 @@ class SolanaKit(
             debug: Boolean = false
         ): SolanaKit {
             val httpClient = httpClient(debug)
+                .newBuilder()
+                .addInterceptor(RentEpochClampInterceptor())
+                .build()
             val config = NetworkingRouterConfig(
                 listOf(MetadataAccountRule()),
                 listOf(MetadataAccountJsonAdapterFactory(), BufferInfoJsonAdapterFactory())
@@ -314,7 +345,7 @@ class SolanaKit(
             val transactionDatabase = SolanaDatabaseManager.getTransactionDatabase(application, walletId)
             val transactionStorage = TransactionStorage(transactionDatabase, addressString)
             val solscanClient = SolscanClient(solscanApiKey, debug)
-            val tokenAccountManager = TokenAccountManager(addressString, rpcApiClient, transactionStorage, mainStorage, SolanaFmService())
+            val tokenAccountManager = TokenAccountManager(addressString, rpcApiClient, transactionStorage, mainStorage, SolanaFmService(solscanApiKey))
             val transactionManager = TransactionManager(address, transactionStorage, rpcAction, tokenAccountManager)
             val pendingTransactionSyncer = PendingTransactionSyncer(rpcApiClient, transactionStorage, transactionManager)
             val transactionSyncer = TransactionSyncer(
