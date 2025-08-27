@@ -34,7 +34,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.min
 import kotlin.random.Random
 
-private const val INTER_REQUEST_DELAY_MS = 150L      // ~6–10 req/s
+private const val INTER_REQUEST_DELAY_MS = 3000L
 private const val MAX_ATTEMPTS_429 = 6
 private const val BASE_DELAY_429_MS = 300L
 private const val MAX_DELAY_429_MS = 10_000L
@@ -95,15 +95,7 @@ class TransactionSyncer(
         try {
             val rpcSignatureInfos = getSignaturesFromRpcNode(lastTransactionHash)
             Log.d("solana-kit", "rpcSignatureInfos: $rpcSignatureInfos")
-            val transactionInfos = getTransactionsFromRpcSignatures(rpcSignatureInfos)
-            Log.d("solana-kit", "transactionInfos: $transactionInfos")
-            //val solTransfers = solscanClient.solTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.solSyncSourceName)?.hash)
-            val solTransfers: List<SolscanTransaction> = listOf()
-            Log.d("solana-kit", "solTransfers: $solTransfers")
-            //val splTransfers = solscanClient.splTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.splSyncSourceName)?.hash)
-            val splTransfers: List<SolscanTransaction> = listOf()
-            Log.d("solana-kit", "splTransfers: $splTransfers")
-            val solscanExportedTxs = (solTransfers + splTransfers).sortedByDescending { it.blockTime }
+            val solscanExportedTxs = solscanClient.allTransfers(publicKey.toBase58(), lastTransactionHash)
             Log.d("solana-kit", "solscanExportedTxs: $solscanExportedTxs")
             val mintAddresses = solscanExportedTxs.mapNotNull { it.mintAccountAddress }.toSet().toList()
             Log.d("solana-kit", "mintAddresses: $mintAddresses")
@@ -111,18 +103,23 @@ class TransactionSyncer(
             Log.d("solana-kit", "mintAccounts: $mintAccounts")
             val tokenAccounts = buildTokenAccounts(solscanExportedTxs, mintAccounts)
             Log.d("solana-kit", "tokenAccounts: $tokenAccounts")
-            val transactions = merge(transactionInfos, solscanExportedTxs, mintAccounts)
+            val transactions = merge(rpcSignatureInfos, solscanExportedTxs, mintAccounts)
             Log.d("solana-kit", "transactions: $transactions")
 
             transactionManager.handle(transactions, tokenAccounts)
 
-            if (solTransfers.isNotEmpty()) {
-                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.solSyncSourceName, solTransfers.first().hash))
+            Log.d("solana-kit", "TransactionSyncer: ${transactions.size} transactions, ${tokenAccounts.size} token accounts")
+
+            if (solscanExportedTxs.isNotEmpty()) {
+                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.syncSourceName, solscanExportedTxs.first().hash))
+                Log.d("solana-kit", "Set last synced transaction to ${solscanExportedTxs.first().hash}")
             }
 
-            if (splTransfers.isNotEmpty()) {
-                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.splSyncSourceName, splTransfers.first().hash))
-            }
+            Log.d("solana-kit", "TransactionSyncer: sync completed")
+//
+//            if (splTransfers.isNotEmpty()) {
+//                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.splSyncSourceName, splTransfers.first().hash))
+//            }
 
             syncState = SolanaKit.SyncState.Synced()
         } catch (exception: Throwable) {
@@ -134,26 +131,13 @@ class TransactionSyncer(
     private suspend fun getTransactionsFromRpcSignatures(rpcSignatureInfos: List<SignatureInfo>): List<TransactionInfo> {
         val transactionObjects = mutableListOf<TransactionInfo>()
 
-        for (info in rpcSignatureInfos) {
-            if (info.err != null) continue
-
-            val tx = try {
-                retry429 { getTransactionChunk(info.signature) }
-            } catch (t: Throwable) {
-                if (!is429(t)) {
-                    Log.w("solana-kit-tx", "Non-429 error for ${info.signature}: $t")
-                }
-                // Swallow on 429 (already retried) or any other error -> skip this sig
-                null
+        for (signatureInfo in rpcSignatureInfos) {
+            var transactionInfo = getTransactionChunk(signatureInfo.signature)
+            if (transactionInfo == null) {
+                Log.w("solana-kit", "Transaction not found for signature: ${signatureInfo.signature}")
+                continue
             }
-
-            if (tx != null) {
-                Log.d("solana-kit-tx", "Transaction object: $tx")
-                transactionObjects.add(tx)
-            }
-
-            // Fixed spacing between RPC calls to avoid throttling
-            delay(INTER_REQUEST_DELAY_MS)
+            transactionObjects.add(transactionInfo)
         }
 
         Log.d("solana-kit", "Total transactions fetched: ${transactionObjects.size}")
@@ -175,20 +159,23 @@ class TransactionSyncer(
         }
     }
 
-    private fun merge(transactionInfos: List<TransactionInfo>,
+    private fun merge(rpcSignatureInfos: List<SignatureInfo>,
                       solscanTxsMap: List<SolscanTransaction>,
                       mintAccounts: Map<String, MintAccount>): List<FullTransaction> {
         val transactions = mutableMapOf<String, FullTransaction>()
+        Log.d("solana-kit", "Merging ${rpcSignatureInfos.size} RPC signatures with ${solscanTxsMap.size} Solscan transactions")
 
-        Log.d("solana-kit", "transactionInfos: $transactionInfos")
-
-        for (transactionInfo in transactionInfos) {
-            val transactionData = transactionInfo.transaction ?: continue
-            val transaction = mapTransactionInfoToEntity(transactionInfo)
-            transactions[transaction.hash] = FullTransaction(transaction, listOf())
+        for (signatureInfo in rpcSignatureInfos) {
+            signatureInfo.blockTime?.let { blockTime ->
+                val transaction = Transaction(signatureInfo.signature, blockTime, error = signatureInfo.err?.toString())
+                transactions[signatureInfo.signature] = FullTransaction(transaction, listOf())
+            }
         }
+        Log.d("solana-kit", "After adding RPC signatures, transactions count: ${transactions.size}")
 
+        Log.d("solana-kit", "Grouping Solscan transactions by hash: ${solscanTxsMap.size} transactions")
         for ((hash, solscanTxs) in solscanTxsMap.groupBy { it.hash }) {
+            Log.d("solana-kit", "Merging transaction for hash: $hash")
             try {
                 val existingTransaction = transactions[hash]?.transaction
                 val solscanTx = solscanTxs.first()
@@ -214,6 +201,7 @@ class TransactionSyncer(
                 }
 
                 transactions[hash] = FullTransaction(mergedTransaction, tokenTransfers)
+                Log.d("solana-kit", "Merged transaction: ${transactions[hash]}")
             } catch (e: Throwable) {
                 continue
             }
@@ -262,14 +250,18 @@ class TransactionSyncer(
         val mintAccountData = suspendCoroutine<List<BufferInfo<Mint>?>> { continuation ->
             rpcClient.getMultipleAccounts(publicKeys, Mint::class.java) { result ->
                 result.onSuccess {
+                    Log.d("solana-kit", "Fetched ${it.size} mint accounts")
                     continuation.resume(it)
                 }
 
                 result.onFailure { exception ->
+                    Log.d("solana-kit", "Error fetching mint accounts", exception)
                     continuation.resumeWithException(exception)
                 }
             }
         }
+
+        Log.d("solana-kit", "Fetched ${mintAccountData.size} mint accounts")
 
         val metadataAccountsMap = mutableMapOf<String, MetadataAccount>()
         nftClient.findAllByMintList(publicKeys).getOrThrow()

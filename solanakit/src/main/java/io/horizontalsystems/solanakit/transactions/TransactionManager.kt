@@ -1,5 +1,6 @@
 package io.horizontalsystems.solanakit.transactions
 
+import android.util.Log
 import com.solana.actions.Action
 import com.solana.core.Account
 import com.solana.core.PublicKey
@@ -64,47 +65,67 @@ class TransactionManager(
     suspend fun getSplTransaction(mintAddress: String, incoming: Boolean?, fromHash: String?, limit: Int?): List<FullTransaction> =
         storage.getSplTransactions(mintAddress, incoming, fromHash, limit)
 
-    suspend fun handle(syncedTransactions: List<FullTransaction>, syncedTokenAccounts: List<TokenAccount>) {
-        val existingMintAddresses = mutableListOf<String>()
+    suspend fun handle(
+        syncedTransactions: List<FullTransaction>,
+        syncedTokenAccounts: List<TokenAccount>
+    ) {
+        try {
+            val existingMintAddresses = mutableListOf<String>()
 
-        if (syncedTransactions.isNotEmpty()) {
-            val existingTransactionsMap = storage.getFullTransactions(syncedTransactions.map { it.transaction.hash }).groupBy { it.transaction.hash }
-            val transactions = syncedTransactions.map { syncedTx ->
-                val existingTx = existingTransactionsMap[syncedTx.transaction.hash]?.firstOrNull()
+            if (syncedTransactions.isNotEmpty()) {
+                val existingTransactionsMap = storage
+                    .getFullTransactions(syncedTransactions.map { it.transaction.hash })
+                    .groupBy { it.transaction.hash }
 
-                if (existingTx == null) syncedTx
-                else {
-                    val syncedTxHeader = syncedTx.transaction
-                    val existingTxHeader = existingTx.transaction
+                val transactions = syncedTransactions.map { syncedTx ->
+                    val existingTx = existingTransactionsMap[syncedTx.transaction.hash]?.firstOrNull()
 
-                    FullTransaction(
-                        transaction = Transaction(
-                            hash = syncedTxHeader.hash,
-                            timestamp = syncedTxHeader.timestamp,
-                            fee = syncedTxHeader.fee,
-                            from = syncedTxHeader.from ?: existingTxHeader.from,
-                            to = syncedTxHeader.to ?: existingTxHeader.to,
-                            amount = syncedTxHeader.amount ?: existingTxHeader.amount,
-                            error = syncedTxHeader.error,
-                            pending = syncedTxHeader.pending,
-                            ),
-                        tokenTransfers = syncedTx.tokenTransfers.ifEmpty {
-                            for (tokenTransfer in existingTx.tokenTransfers) {
-                                existingMintAddresses.add(tokenTransfer.mintAccount.address)
+                    if (existingTx == null) {
+                        syncedTx
+                    } else {
+                        val syncedTxHeader = syncedTx.transaction
+                        val existingTxHeader = existingTx.transaction
+
+                        if (existingTx.tokenTransfers.isNotEmpty()) {
+                            for (tt in existingTx.tokenTransfers) {
+                                val mintAddr = tt.mintAccount?.address
+                                if (!mintAddr.isNullOrBlank()) {
+                                    existingMintAddresses.add(mintAddr)
+                                }
                             }
-
-                            existingTx.tokenTransfers
                         }
-                    )
+
+                        FullTransaction(
+                            transaction = Transaction(
+                                hash = syncedTxHeader.hash,
+                                timestamp = syncedTxHeader.timestamp,
+                                fee = syncedTxHeader.fee,
+                                from = syncedTxHeader.from ?: existingTxHeader.from,
+                                to = syncedTxHeader.to ?: existingTxHeader.to,
+                                amount = syncedTxHeader.amount ?: existingTxHeader.amount,
+                                error = syncedTxHeader.error,
+                                pending = syncedTxHeader.pending
+                            ),
+                            tokenTransfers = syncedTx.tokenTransfers.ifEmpty {
+                                existingTx.tokenTransfers
+                            }
+                        )
+                    }
                 }
+
+                storage.addTransactions(transactions)
+                _transactionsFlow.tryEmit(transactions)
             }
 
-            storage.addTransactions(transactions)
-            _transactionsFlow.tryEmit(transactions)
-        }
-
-        if (syncedTokenAccounts.isNotEmpty() || existingMintAddresses.isNotEmpty()) {
-            tokenAccountManager.addAccount(syncedTokenAccounts.toSet().toList(), existingMintAddresses.toSet().toList())
+            if (syncedTokenAccounts.isNotEmpty() || existingMintAddresses.isNotEmpty()) {
+                tokenAccountManager.addAccount(
+                    syncedTokenAccounts.distinct(),
+                    existingMintAddresses.distinct()
+                )
+            }
+        } catch (t: Throwable) {
+            Log.e("solana-kit", "TransactionManager.handle() NPE guard", t)
+            throw t
         }
     }
 

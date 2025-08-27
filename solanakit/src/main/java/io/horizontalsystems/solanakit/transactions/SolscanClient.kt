@@ -1,5 +1,6 @@
 package io.horizontalsystems.solanakit.transactions
 
+import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,9 +18,10 @@ class SolscanClient(
     auth: String,
     debug: Boolean
 ) {
+    val syncSourceName = "solscan.io"
     val solSyncSourceName = "solscan.io/solTransfers"
     val splSyncSourceName = "solscan.io/splTransfers"
-    private val url = "https://public-api.solscan.io"
+    private val url = "https://pro-api.solscan.io/v2.0"
 
     private val httpClient = httpClient(auth, debug)
 
@@ -45,6 +47,28 @@ class SolscanClient(
         return solscanTxs
     }
 
+    suspend fun allTransfers(account: String, lastSolTransferHash: String?): List<SolscanTransaction> {
+        val transactionsLimit = if (lastSolTransferHash != null) 10 else maxTransactionsLimit
+        val allTxs = mutableListOf<SolscanTransaction>()
+        var allTxsChunk: List<SolscanTransaction>
+
+        var page = 1
+        do {
+            allTxsChunk = allTransfersChunk(account, transactionsLimit, page)
+
+            val index = lastSolTransferHash?.let { allTxsChunk.indexOfFirst { it.hash == lastSolTransferHash } }
+            if (lastSolTransferHash != null && index != null && index >= 0) {
+                allTxs.addAll(allTxsChunk.subList(0, index))
+                break
+            } else {
+                allTxs.addAll(allTxsChunk)
+            }
+            page += 1
+        } while (allTxsChunk.size == transactionsLimit && page < maxPagesSynced)
+
+        return allTxs
+    }
+
     suspend fun splTransfers(account: String, lastSplTransferHash: String?): List<SolscanTransaction> {
         val transactionsLimit = if (lastSplTransferHash != null) 5 else maxTransactionsLimit
         val solscanTxs = mutableListOf<SolscanTransaction>()
@@ -65,6 +89,61 @@ class SolscanClient(
         } while (solscanTxsChunk.size == transactionsLimit && page < maxPagesSynced)
 
         return solscanTxs
+    }
+
+    private suspend fun allTransfersChunk(account: String, limit: Int, page: Int): List<SolscanTransaction> {
+        val path = "/account/transfer?address=$account&page=$page&page_size=$limit"
+        val request: Request = Request.Builder().url(url + path).build()
+        val balanceRequestPath = "/account/balance_change?address=$account&page=$page&page_size=$limit"
+        val balanceRequest: Request = Request.Builder().url(url + balanceRequestPath).build()
+
+        return suspendCoroutine { continuation ->
+            try {
+                val responseBody: ResponseBody = httpClient.newCall(request).execute().body
+                val getBalanceInfoBody: ResponseBody = httpClient.newCall(balanceRequest).execute().body
+                val resultObject = JSONObject(responseBody.string())
+                val balanceResultObject = JSONObject(getBalanceInfoBody.string())
+                val txObjects: JSONArray = resultObject.getJSONArray("data")
+                val balanceTxObjects: JSONArray = balanceResultObject.getJSONArray("data")
+                val SOL_TOKEN_ADDRESS: String = "So11111111111111111111111111111111111111111"
+
+                val transactions = mutableListOf<SolscanTransaction>()
+                for (i in 0 until txObjects.length()) {
+                    val txObject: JSONObject = txObjects.getJSONObject(i)
+                    val balanceObject: JSONObject = balanceTxObjects.getJSONObject(i)
+                    Log.d("solana-kit", "allTransfersChunk: balanceObject: $balanceObject")
+                    if (txObject.getString("token_address") == SOL_TOKEN_ADDRESS) {
+                        transactions.add(
+                            // SOL transfer
+                            SolscanTransaction(
+                                hash = txObject.getString("trans_id"),
+                                blockTime = txObject.getLong("block_time"),
+                                fee = balanceObject.getString("fee"),
+                                solTransferSource = txObject.getString("from_address"),
+                                solTransferDestination = txObject.getString("to_address"),
+                                solAmount = txObject.getLong("amount"),
+                            )
+                        )
+                    } else {
+                        transactions.add(
+                            // SPL transfer
+                            SolscanTransaction(
+                                hash = txObject.getString("trans_id"),
+                                blockTime = txObject.getLong("block_time"),
+                                fee = balanceObject.getString("fee"),
+                                tokenAccountAddress = txObject.getString("from_token_account"),
+                                mintAccountAddress = txObject.getString("token_address"),
+                                splBalanceChange = (balanceObject.getInt("post_balance") - balanceObject.getInt("pre_balance")).toString()
+                            )
+                        )
+                    }
+                }
+
+                continuation.resume(transactions)
+            } catch (e: IOException) {
+                continuation.resumeWithException(RuntimeException(e))
+            }
+        }
     }
 
     private suspend fun solTransfersChunk(account: String, limit: Int, page: Int): List<SolscanTransaction> {
@@ -210,7 +289,7 @@ class SolscanClient(
 //    private fun toOptionalString(value: String): String? = value.trim().removeSurrounding("\"").ifEmpty { null }
 
     companion object {
-        const val maxTransactionsLimit = 50
+        const val maxTransactionsLimit = 60
         const val maxPagesSynced = 20
     }
 
