@@ -95,7 +95,10 @@ class TransactionSyncer(
         try {
             val rpcSignatureInfos = getSignaturesFromRpcNode(lastTransactionHash)
             Log.d("solana-kit", "rpcSignatureInfos: $rpcSignatureInfos")
-            val solscanExportedTxs = solscanClient.allTransfers(publicKey.toBase58(), lastTransactionHash)
+            val solTransfers = solscanClient.solTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.solSyncSourceName)?.hash)
+            val splTransfers = solscanClient.splTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.splSyncSourceName)?.hash)
+            val solscanExportedTxs = (solTransfers + splTransfers).sortedByDescending { it.blockTime }
+//            val solscanExportedTxs = solscanClient.allTransfers(publicKey.toBase58(), lastTransactionHash)
             Log.d("solana-kit", "solscanExportedTxs: $solscanExportedTxs")
             val mintAddresses = solscanExportedTxs.mapNotNull { it.mintAccountAddress }.toSet().toList()
             Log.d("solana-kit", "mintAddresses: $mintAddresses")
@@ -110,9 +113,12 @@ class TransactionSyncer(
 
             Log.d("solana-kit", "TransactionSyncer: ${transactions.size} transactions, ${tokenAccounts.size} token accounts")
 
-            if (solscanExportedTxs.isNotEmpty()) {
-                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.syncSourceName, solscanExportedTxs.first().hash))
-                Log.d("solana-kit", "Set last synced transaction to ${solscanExportedTxs.first().hash}")
+            if (solTransfers.isNotEmpty()) {
+                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.solSyncSourceName, solTransfers.first().hash))
+            }
+
+            if (splTransfers.isNotEmpty()) {
+                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.splSyncSourceName, splTransfers.first().hash))
             }
 
             Log.d("solana-kit", "TransactionSyncer: sync completed")
