@@ -186,7 +186,8 @@ class TransactionSyncer(
                     solscanTx.solTransferSource,
                     solscanTx.solTransferDestination,
                     solscanTx.solAmount?.toBigDecimal(),
-                    existingTransaction?.error
+                    existingTransaction?.error,
+                    pending = false,
                 )
 
                 val tokenTransfers: List<FullTokenTransfer> = solscanTxs.mapNotNull { solscanTx ->
