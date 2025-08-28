@@ -110,7 +110,10 @@ class SolscanClient(
                 val transactions = mutableListOf<SolscanTransaction>()
                 for (i in 0 until txObjects.length()) {
                     val txObject: JSONObject = txObjects.getJSONObject(i)
-                    val balanceObject: JSONObject = balanceTxObjects.getJSONObject(i)
+                    val transId = txObject.getString("trans_id")
+                    val balanceObject: JSONObject? = (0 until balanceTxObjects.length())
+                        .map { balanceTxObjects.getJSONObject(it) }
+                        .firstOrNull { it.getString("trans_id") == transId }
                     Log.d("solana-kit", "allTransfersChunk: balanceObject: $balanceObject")
                     if (txObject.getString("token_address") == SOL_TOKEN_ADDRESS) {
                         transactions.add(
@@ -118,7 +121,7 @@ class SolscanClient(
                             SolscanTransaction(
                                 hash = txObject.getString("trans_id"),
                                 blockTime = txObject.getLong("block_time"),
-                                fee = balanceObject.getString("fee"),
+                                fee = balanceObject!!.getString("fee"),
                                 solTransferSource = txObject.getString("from_address"),
                                 solTransferDestination = txObject.getString("to_address"),
                                 solAmount = txObject.getLong("amount"),
@@ -130,8 +133,8 @@ class SolscanClient(
                             SolscanTransaction(
                                 hash = txObject.getString("trans_id"),
                                 blockTime = txObject.getLong("block_time"),
-                                fee = balanceObject.getString("fee"),
-                                tokenAccountAddress = txObject.getString("from_token_account"),
+                                fee = balanceObject!!.getString("fee"),
+                                tokenAccountAddress = txObject.getString("to_token_account"),
                                 mintAccountAddress = txObject.getString("token_address"),
                                 splBalanceChange = (balanceObject.getInt("post_balance") - balanceObject.getInt("pre_balance")).toString()
                             )
