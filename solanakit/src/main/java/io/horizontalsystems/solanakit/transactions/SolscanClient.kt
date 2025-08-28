@@ -49,27 +49,27 @@ class SolscanClient(
         return solscanTxs
     }
 
-    suspend fun allTransfers(account: String, lastSolTransferHash: String?): List<SolscanTransaction> {
-        val transactionsLimit = if (lastSolTransferHash != null) 10 else maxTransactionsLimit
-        val allTxs = mutableListOf<SolscanTransaction>()
-        var allTxsChunk: List<SolscanTransaction>
-
-        var page = 1
-        do {
-            allTxsChunk = allTransfersChunk(account, transactionsLimit, page)
-
-            val index = lastSolTransferHash?.let { allTxsChunk.indexOfFirst { it.hash == lastSolTransferHash } }
-            if (lastSolTransferHash != null && index != null && index >= 0) {
-                allTxs.addAll(allTxsChunk.subList(0, index))
-                break
-            } else {
-                allTxs.addAll(allTxsChunk)
-            }
-            page += 1
-        } while (allTxsChunk.size == transactionsLimit && page < maxPagesSynced)
-
-        return allTxs
-    }
+//    suspend fun allTransfers(account: String, lastSolTransferHash: String?): List<SolscanTransaction> {
+//        val transactionsLimit = if (lastSolTransferHash != null) 10 else maxTransactionsLimit
+//        val allTxs = mutableListOf<SolscanTransaction>()
+//        var allTxsChunk: List<SolscanTransaction>
+//
+//        var page = 1
+//        do {
+//            allTxsChunk = allTransfersChunk(account, transactionsLimit, page)
+//
+//            val index = lastSolTransferHash?.let { allTxsChunk.indexOfFirst { it.hash == lastSolTransferHash } }
+//            if (lastSolTransferHash != null && index != null && index >= 0) {
+//                allTxs.addAll(allTxsChunk.subList(0, index))
+//                break
+//            } else {
+//                allTxs.addAll(allTxsChunk)
+//            }
+//            page += 1
+//        } while (allTxsChunk.size == transactionsLimit && page < maxPagesSynced)
+//
+//        return allTxs
+//    }
 
     suspend fun splTransfers(account: String, lastSplTransferHash: String?): List<SolscanTransaction> {
         val transactionsLimit = if (lastSplTransferHash != null) 5 else maxTransactionsLimit
@@ -93,56 +93,60 @@ class SolscanClient(
         return solscanTxs
     }
 
-    private suspend fun allTransfersChunk(account: String, limit: Int, page: Int): List<SolscanTransaction> {
-        val path = "/account/transfer?address=$account&page=$page&page_size=$limit"
-        val request: Request = Request.Builder().url(url + path).build()
-        val balanceRequestPath = "/account/balance_change?address=$account&page=$page&page_size=$limit"
-        val balanceRequest: Request = Request.Builder().url(url + balanceRequestPath).build()
-
-        return suspendCoroutine { continuation ->
-            try {
-                val responseBody: ResponseBody = httpClient.newCall(request).execute().body
-                val getBalanceInfoBody: ResponseBody = httpClient.newCall(balanceRequest).execute().body
-                val resultObject = JSONObject(responseBody.string())
-                val balanceResultObject = JSONObject(getBalanceInfoBody.string())
-                val txObjects: JSONArray = resultObject.getJSONArray("data")
-                val balanceTxObjects: JSONArray = balanceResultObject.getJSONArray("data")
-
-                val transactions = mutableListOf<SolscanTransaction>()
-                for (i in 0 until txObjects.length()) {
-                    val txObject: JSONObject = txObjects.getJSONObject(i)
-                    val transId = txObject.getString("trans_id")
-                    val balanceObject: JSONObject? = (0 until balanceTxObjects.length())
-                        .map { balanceTxObjects.getJSONObject(it) }
-                        .firstOrNull { it.getString("trans_id") == transId }
-                    var solAmount: Long? = null
-                    if (txObject.getString("token_address") == SOL_TOKEN_ADDRESS) {
-                        solAmount = txObject.getLong("amount")
-                    }
-                    transactions.add(
-                        // SPL transfer
-                        SolscanTransaction(
-                            hash = txObject.getString("trans_id"),
-                            blockTime = txObject.getLong("block_time"),
-                            solTransferSource = txObject.getString("from_address"),
-                            solTransferDestination = txObject.getString("to_address"),
-                            fee = BigDecimal(balanceObject!!.getLong("fee")).movePointLeft(9).toString(),
-                            tokenAccountAddress = txObject.getString("to_token_account"),
-                            mintAccountAddress = txObject.getString("token_address"),
-                            splBalanceChange = (balanceObject.getInt("post_balance") - balanceObject.getInt("pre_balance")).toString(),
-                            solAmount = solAmount,
-                        )
-                    )
-                }
-                continuation.resume(transactions)
-            } catch (e: IOException) {
-                continuation.resumeWithException(RuntimeException(e))
-            }
-        }
-    }
+//    private suspend fun allTransfersChunk(account: String, limit: Int, page: Int): List<SolscanTransaction> {
+//        val path = "/account/transfer?address=$account&page=$page&page_size=$limit"
+//        val request: Request = Request.Builder().url(url + path).build()
+//        val balanceRequestPath = "/account/balance_change?address=$account&page=$page&page_size=$limit"
+//        val balanceRequest: Request = Request.Builder().url(url + balanceRequestPath).build()
+//
+//        return suspendCoroutine { continuation ->
+//            try {
+//                val responseBody: ResponseBody = httpClient.newCall(request).execute().body
+//                val getBalanceInfoBody: ResponseBody = httpClient.newCall(balanceRequest).execute().body
+//                val resultObject = JSONObject(responseBody.string())
+//                val balanceResultObject = JSONObject(getBalanceInfoBody.string())
+//                val txObjects: JSONArray = resultObject.getJSONArray("data")
+//                val balanceTxObjects: JSONArray = balanceResultObject.getJSONArray("data")
+//
+//                val transactions = mutableListOf<SolscanTransaction>()
+//                for (i in 0 until txObjects.length()) {
+//                    val txObject: JSONObject = txObjects.getJSONObject(i)
+//                    val transId = txObject.getString("trans_id")
+//                    val balanceObject: JSONObject? = (0 until balanceTxObjects.length())
+//                        .map { balanceTxObjects.getJSONObject(it) }
+//                        .firstOrNull { it.getString("trans_id") == transId }
+//                    var solAmount: Long? = null
+//                    if (txObject.getString("token_address") == SOL_TOKEN_ADDRESS) {
+//                        solAmount = txObject.getLong("amount")
+//                    }
+//                    val balanceChange = balanceObject!!.getInt("post_balance") - balanceObject.getInt("pre_balance")
+//                    val key = if (balanceChange > 0) {
+//                        "to_token_account"
+//                    } else {
+//                        "from_token_account"
+//                    }
+//                    transactions.add(
+//                        // SPL transfer
+//                        SolscanTransaction(
+//                            hash = txObject.getString("trans_id"),
+//                            blockTime = txObject.getLong("block_time"),
+//                            fee = BigDecimal(balanceObject.getLong("fee")).movePointLeft(9).toString(),
+//                            tokenAccountAddress = txObject.getString(key),
+//                            mintAccountAddress = txObject.getString("token_address"),
+//                            splBalanceChange = balanceChange.toString(),
+//                            solAmount = solAmount,
+//                        )
+//                    )
+//                }
+//                continuation.resume(transactions)
+//            } catch (e: IOException) {
+//                continuation.resumeWithException(RuntimeException(e))
+//            }
+//        }
+//    }
 
     private suspend fun solTransfersChunk(account: String, limit: Int, page: Int): List<SolscanTransaction> {
-        val path = "/account/transfer?address=$account&page=$page&page_size=$limit&token=$SOL_TOKEN_ADDRESS"
+        val path = "/account/transfer?address=$account&activity_type[]=ACTIVITY_SPL_TRANSFER&page=$page&page_size=$limit&token=$SOL_TOKEN_ADDRESS"
         val request: Request = Request.Builder().url(url + path).build()
 
         val balanceRequestPath = "/account/balance_change?address=$account&page=$page&page_size=$limit"
@@ -162,9 +166,10 @@ class SolscanClient(
                 for (i in 0 until txObjects.length()) {
                     val txObject: JSONObject = txObjects.getJSONObject(i)
                     val transId = txObject.getString("trans_id")
+                    val tokenAddress = txObject.getString("token_address")
                     val balanceObject: JSONObject? = (0 until balanceTxObjects.length())
                         .map { balanceTxObjects.getJSONObject(it) }
-                        .firstOrNull { it.getString("trans_id") == transId }
+                        .firstOrNull { it.getString("trans_id") == transId && it.getString("token_address") == tokenAddress }
                     transactions.add(
                         SolscanTransaction(
                             hash = txObject.getString("trans_id"),
@@ -185,7 +190,7 @@ class SolscanClient(
     }
 
     private suspend fun splTransfersChunk(account: String, limit: Int, page: Int): List<SolscanTransaction> {
-        val path = "/account/transfer?address=$account&page=$page&page_size=$limit"
+        val path = "/account/transfer?address=$account&activity_type[]=ACTIVITY_SPL_TRANSFER&page=$page&page_size=$limit"
         val request: Request = Request.Builder().url(url + path).build()
         val balanceRequestPath = "/account/balance_change?address=$account&page=$page&page_size=$limit"
         val balanceRequest: Request = Request.Builder().url(url + balanceRequestPath).build()
@@ -196,6 +201,7 @@ class SolscanClient(
                 val getBalanceInfoBody: ResponseBody = httpClient.newCall(balanceRequest).execute().body
                 val resultObject = JSONObject(responseBody.string())
                 val balanceResultObject = JSONObject(getBalanceInfoBody.string())
+
                 val txObjects: JSONArray = resultObject.getJSONArray("data")
                 val balanceTxObjects: JSONArray = balanceResultObject.getJSONArray("data")
 
@@ -206,18 +212,27 @@ class SolscanClient(
                         continue
                     }
                     val transId = txObject.getString("trans_id")
+                    val tokenAddress = txObject.getString("token_address")
                     val balanceObject: JSONObject? = (0 until balanceTxObjects.length())
                         .map { balanceTxObjects.getJSONObject(it) }
-                        .firstOrNull { it.getString("trans_id") == transId }
+                        .firstOrNull { it.getString("trans_id") == transId && it.getString("token_address") == tokenAddress }
+                    val balanceChange = balanceObject!!.getInt("post_balance") - balanceObject.getInt("pre_balance")
+                    val key = if (balanceChange > 0) {
+                        "to_token_account"
+                    } else {
+                        "from_token_account"
+                    }
                     transactions.add(
                         // SPL transfer
                         SolscanTransaction(
                             hash = txObject.getString("trans_id"),
                             blockTime = txObject.getLong("block_time"),
-                            fee = BigDecimal(balanceObject!!.getLong("fee")).movePointLeft(9).toString(),
-                            tokenAccountAddress = txObject.getString("to_token_account"),
+                            fee = BigDecimal(balanceObject.getLong("fee")).movePointLeft(9).toString(),
+                            solTransferSource = txObject.getString("from_address"),
+                            solTransferDestination = txObject.getString("to_address"),
+                            tokenAccountAddress = txObject.getString(key),
                             mintAccountAddress = txObject.getString("token_address"),
-                            splBalanceChange = (balanceObject.getInt("post_balance") - balanceObject.getInt("pre_balance")).toString()
+                            splBalanceChange = balanceChange.toString()
                         )
                     )
                 }
