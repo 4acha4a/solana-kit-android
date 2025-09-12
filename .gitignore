@@ -9,4 +9,5 @@
 /captures
 .externalNativeBuild
 .cxx
+/app/src/main/java/io/horizontalsystems/solanakit/sample/Configuration.kt
 local.properties
