@@ -1,10 +1,14 @@
 package io.horizontalsystems.solanakit.transactions
 
-import android.util.Log
 import com.solana.actions.Action
+import com.solana.actions.findSPLTokenDestinationAddress
 import com.solana.core.Account
 import com.solana.core.PublicKey
+import com.solana.core.SerializeConfig
 import com.solana.core.TransactionInstruction
+import com.solana.programs.AssociatedTokenProgram
+import com.solana.programs.SystemProgram
+import com.solana.programs.TokenProgram
 import io.horizontalsystems.solanakit.SolanaKit
 import io.horizontalsystems.solanakit.core.TokenAccountManager
 import io.horizontalsystems.solanakit.database.transaction.TransactionStorage
@@ -14,15 +18,20 @@ import io.horizontalsystems.solanakit.models.FullTransaction
 import io.horizontalsystems.solanakit.models.TokenAccount
 import io.horizontalsystems.solanakit.models.TokenTransfer
 import io.horizontalsystems.solanakit.models.Transaction
+import io.reactivex.Single
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.rx2.await
+import com.solana.core.Transaction as SolanaTransaction
 import org.sol4k.Connection
 import org.sol4k.RpcUrl
 import org.sol4k.api.Commitment
+import com.solana.vendor.ContResult
+import com.solana.vendor.ResultError
+import com.solana.vendor.flatMap
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -65,67 +74,48 @@ class TransactionManager(
     suspend fun getSplTransaction(mintAddress: String, incoming: Boolean?, fromHash: String?, limit: Int?): List<FullTransaction> =
         storage.getSplTransactions(mintAddress, incoming, fromHash, limit)
 
-    suspend fun handle(
-        syncedTransactions: List<FullTransaction>,
-        syncedTokenAccounts: List<TokenAccount>
-    ) {
-        try {
-            val existingMintAddresses = mutableListOf<String>()
+    suspend fun handle(syncedTransactions: List<FullTransaction>, syncedTokenAccounts: List<TokenAccount>) {
+        val existingMintAddresses = mutableListOf<String>()
 
-            if (syncedTransactions.isNotEmpty()) {
-                val existingTransactionsMap = storage
-                    .getFullTransactions(syncedTransactions.map { it.transaction.hash })
-                    .groupBy { it.transaction.hash }
+        if (syncedTransactions.isNotEmpty()) {
+            android.util.Log.d("solana-kit", "TransactionManager: handle ${syncedTransactions.size} transactions")
+            val existingTransactionsMap = storage.getFullTransactions(syncedTransactions.map { it.transaction.hash }).groupBy { it.transaction.hash }
+            val transactions = syncedTransactions.map { syncedTx ->
+                val existingTx = existingTransactionsMap[syncedTx.transaction.hash]?.firstOrNull()
 
-                val transactions = syncedTransactions.map { syncedTx ->
-                    val existingTx = existingTransactionsMap[syncedTx.transaction.hash]?.firstOrNull()
+                if (existingTx == null) syncedTx
+                else {
+                    val syncedTxHeader = syncedTx.transaction
+                    val existingTxHeader = existingTx.transaction
 
-                    if (existingTx == null) {
-                        syncedTx
-                    } else {
-                        val syncedTxHeader = syncedTx.transaction
-                        val existingTxHeader = existingTx.transaction
-
-                        if (existingTx.tokenTransfers.isNotEmpty()) {
-                            for (tt in existingTx.tokenTransfers) {
-                                val mintAddr = tt.mintAccount?.address
-                                if (!mintAddr.isNullOrBlank()) {
-                                    existingMintAddresses.add(mintAddr)
-                                }
+                    FullTransaction(
+                        transaction = Transaction(
+                            hash = syncedTxHeader.hash,
+                            timestamp = syncedTxHeader.timestamp,
+                            fee = syncedTxHeader.fee,
+                            from = syncedTxHeader.from ?: existingTxHeader.from,
+                            to = syncedTxHeader.to ?: existingTxHeader.to,
+                            amount = syncedTxHeader.amount ?: existingTxHeader.amount,
+                            error = syncedTxHeader.error,
+                            pending = syncedTxHeader.pending,
+                        ),
+                        tokenTransfers = syncedTx.tokenTransfers.ifEmpty {
+                            for (tokenTransfer in existingTx.tokenTransfers) {
+                                existingMintAddresses.add(tokenTransfer.mintAccount.address)
                             }
+
+                            existingTx.tokenTransfers
                         }
-
-                        FullTransaction(
-                            transaction = Transaction(
-                                hash = syncedTxHeader.hash,
-                                timestamp = syncedTxHeader.timestamp,
-                                fee = syncedTxHeader.fee,
-                                from = syncedTxHeader.from ?: existingTxHeader.from,
-                                to = syncedTxHeader.to ?: existingTxHeader.to,
-                                amount = syncedTxHeader.amount ?: existingTxHeader.amount,
-                                error = syncedTxHeader.error,
-                                pending = syncedTxHeader.pending
-                            ),
-                            tokenTransfers = syncedTx.tokenTransfers.ifEmpty {
-                                existingTx.tokenTransfers
-                            }
-                        )
-                    }
+                    )
                 }
-
-                storage.addTransactions(transactions)
-                _transactionsFlow.tryEmit(transactions)
             }
 
-            if (syncedTokenAccounts.isNotEmpty() || existingMintAddresses.isNotEmpty()) {
-                tokenAccountManager.addAccount(
-                    syncedTokenAccounts.distinct(),
-                    existingMintAddresses.distinct()
-                )
-            }
-        } catch (t: Throwable) {
-            Log.e("solana-kit", "TransactionManager.handle() NPE guard", t)
-            throw t
+            storage.addTransactions(transactions)
+            _transactionsFlow.tryEmit(transactions)
+        }
+
+        if (syncedTokenAccounts.isNotEmpty() || existingMintAddresses.isNotEmpty()) {
+            tokenAccountManager.addAccount(syncedTokenAccounts.toSet().toList(), existingMintAddresses.toSet().toList())
         }
     }
 
@@ -148,6 +138,97 @@ class TransactionManager(
 
             fullTokenTransfer.tokenTransfer.incoming == incoming
         }
+
+    fun getSolTransactionHex(
+        from: PublicKey,
+        destination: PublicKey,
+        amount: Long,
+        instructions: List<TransactionInstruction>,
+        recentBlockHash: String
+    ): Single<ByteArray> = Single.create { emitter ->
+        try {
+            val transferInstruction = SystemProgram.transfer(from, destination, amount)
+            val transaction = SolanaTransaction()
+
+            if (instructions.isNotEmpty()) {
+                transaction.add(*instructions.toTypedArray())
+            }
+
+            transaction.add(transferInstruction)
+
+            transaction.recentBlockhash = recentBlockHash
+            transaction.feePayer = from
+
+
+            if (!emitter.isDisposed) emitter.onSuccess(
+                transaction.serialize(
+                    SerializeConfig(
+                        requireAllSignatures = false,
+                        verifySignatures = false
+                    )
+                )
+            )
+        } catch (t: Throwable) {
+            if (!emitter.isDisposed) emitter.onError(t)
+        }
+    }
+
+    fun getSplTransactionHex(
+        mintAddress: PublicKey,
+        fromPublicKey: PublicKey,
+        destinationAddress: PublicKey,
+        amount: Long,
+        recentBlockHash: String,
+        allowUnfundedRecipient: Boolean = false
+    ): Single<ByteArray> = Single.create { emitter ->
+        ContResult { cb ->
+            rpcAction.findSPLTokenDestinationAddress(
+                mintAddress,
+                destinationAddress,
+                allowUnfundedRecipient
+            ) { cb(it) }
+        }.flatMap { spl ->
+            val toPublicKey = spl.first
+            val unregisteredAssociatedToken = spl.second
+            if (fromPublicKey.toBase58() == toPublicKey.toBase58()) {
+                return@flatMap ContResult.failure(ResultError("Same send and destination address."))
+            }
+            val transaction = SolanaTransaction()
+
+            // create associated token address
+            if (unregisteredAssociatedToken) {
+                val createATokenInstruction = AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
+                    mint = mintAddress,
+                    associatedAccount = toPublicKey,
+                    owner = destinationAddress,
+                    payer = fromPublicKey
+                )
+                transaction.add(createATokenInstruction)
+            }
+
+            // send instruction
+            val sendInstruction = TokenProgram.transfer(fromPublicKey, toPublicKey, amount, fromPublicKey)
+            transaction.add(sendInstruction)
+
+            transaction.recentBlockhash = recentBlockHash
+            transaction.feePayer = fromPublicKey
+
+            return@flatMap ContResult.success(transaction)
+        }.run { result ->
+            result.onSuccess {
+                emitter.onSuccess(
+                    it.serialize(
+                        SerializeConfig(
+                            requireAllSignatures = false,
+                            verifySignatures = false
+                        )
+                    )
+                )
+            }.onFailure {
+                emitter.onError(it)
+            }
+        }
+    }
 
     suspend fun sendSol(toAddress: Address, amount: Long, signerAccount: Account): FullTransaction {
         val connection = Connection(RpcUrl.MAINNNET)

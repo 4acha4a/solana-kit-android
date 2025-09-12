@@ -7,6 +7,8 @@ import com.metaplex.lib.programs.token_metadata.accounts.MetadataAccountJsonAdap
 import com.metaplex.lib.programs.token_metadata.accounts.MetadataAccountRule
 import com.solana.actions.Action
 import com.solana.api.Api
+import com.solana.core.PublicKey
+import com.solana.core.TransactionInstruction
 import com.solana.networking.Network
 import com.solana.networking.NetworkingRouterConfig
 import com.solana.networking.OkHttpNetworkingRouter
@@ -32,6 +34,7 @@ import io.horizontalsystems.solanakit.transactions.SolanaFmService
 import io.horizontalsystems.solanakit.transactions.SolscanClient
 import io.horizontalsystems.solanakit.transactions.TransactionManager
 import io.horizontalsystems.solanakit.transactions.TransactionSyncer
+import io.reactivex.Single
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -124,6 +127,38 @@ class SolanaKit(
     }
     val nonFungibleTokenAccountsFlow: Flow<List<FullTokenAccount>> = tokenAccountManager.tokenAccountsFlow.map { tokenAccounts ->
         tokenAccounts.filter { it.mintAccount.isNft }
+    }
+
+    fun getSolTransactionHex(
+        from: PublicKey,
+        destination: PublicKey,
+        amount: Long,
+        instructions: List<TransactionInstruction>,
+        recentBlockHash: String
+    ): Single<ByteArray> {
+        return transactionManager.getSolTransactionHex(
+            from,
+            destination,
+            amount,
+            instructions,
+            recentBlockHash
+        )
+    }
+
+    fun getSplTransactionHex(
+        mintAddress: PublicKey,
+        fromPublicKey: PublicKey,
+        destinationAddress: PublicKey,
+        amount: Long,
+        recentBlockHash: String
+    ): Single<ByteArray> {
+        return transactionManager.getSplTransactionHex(
+            mintAddress,
+            fromPublicKey,
+            destinationAddress,
+            amount,
+            recentBlockHash
+        )
     }
 
     fun tokenAccount(mintAddress: String): FullTokenAccount? =
@@ -237,6 +272,35 @@ class SolanaKit(
         val base64Encoded = Base64.getEncoder().encodeToString(hexEncoded)
         val versionedTx = VersionedTransaction.from(base64Encoded)
         val signature = Base58.encode(signer.account.sign(versionedTx.message.serialize()))
+        versionedTx.addSignature(signature)
+        val base64WithSignature = Base64.getEncoder().encodeToString(versionedTx.serialize())
+
+        val connection = Connection(RpcUrl.MAINNNET)
+        val blockHash = connection.getLatestBlockhashExtended(Commitment.FINALIZED)
+
+        val transactionHash = connection.sendTransaction(versionedTx)
+
+        val fullTransaction = FullTransaction(
+            transaction = Transaction(
+                hash = transactionHash,
+                timestamp = Instant.now().epochSecond,
+                fee = versionedTx.calculateFee(baseFeeLamports),
+                from = address.publicKey.toBase58(),
+                to = null,
+                amount = null,
+                pending = true,
+                lastValidBlockHeight = blockHash.lastValidBlockHeight,
+                base64Encoded = base64WithSignature
+            ),
+            listOf()
+        )
+
+        return fullTransaction
+    }
+
+    fun sendRawTransaction(hexEncoded: ByteArray, signature: String): FullTransaction {
+        val base64Encoded = Base64.getEncoder().encodeToString(hexEncoded)
+        val versionedTx = VersionedTransaction.from(base64Encoded)
         versionedTx.addSignature(signature)
         val base64WithSignature = Base64.getEncoder().encodeToString(versionedTx.serialize())
 
