@@ -22,6 +22,9 @@ class TransactionsViewModel : ViewModel() {
                 """
                     Hash: ${it.transaction.hash}
                     Date: ${dateFormat.format(Date(it.transaction.timestamp * 1000))}
+                    From: ${it.transaction.from}
+                    To: ${it.transaction.to}
+                    Amount: ${it.transaction.amount}
                 """.trimIndent()
             }
 
@@ -36,6 +39,9 @@ class TransactionsViewModel : ViewModel() {
                 """
                     Hash: ${it.transaction.hash}
                     Date: ${dateFormat.format(Date(it.transaction.timestamp * 1000))}
+                    From: ${it.transaction.from}
+                    To: ${it.transaction.to}
+                    Amount: ${it.transaction.amount}
                 """.trimIndent()
             }
 
@@ -49,6 +55,9 @@ class TransactionsViewModel : ViewModel() {
                 """
                     Hash: ${it.transaction.hash}
                     Date: ${dateFormat.format(Date(it.transaction.timestamp * 1000))}
+                    From: ${it.transaction.from}
+                    To: ${it.transaction.to}
+                    Amount: ${it.transaction.amount}
                 """.trimIndent()
             }
 
@@ -58,10 +67,13 @@ class TransactionsViewModel : ViewModel() {
 
     fun getSplTransactions(incoming: Boolean?) {
         viewModelScope.launch {
-            val txs = App.instance.solanaKit.getSplTransactions("AFbX8oGjGpmVFywbVouvhQSRmiW2aR1mohfahi4Y2AdB", incoming).map {
+            val txs = App.instance.solanaKit.getSplTransactions("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", incoming).map {
                 """
                     Hash: ${it.transaction.hash}
                     Date: ${dateFormat.format(Date(it.transaction.timestamp * 1000))}
+                    From: ${it.transaction.from}
+                    To: ${it.transaction.to}
+                    Amount: ${it.tokenTransfers.firstOrNull { tt -> tt.mintAccount.address == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" }?.tokenTransfer?.amount}
                 """.trimIndent()
             }
 
