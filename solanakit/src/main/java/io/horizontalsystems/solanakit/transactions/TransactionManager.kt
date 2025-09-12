@@ -140,25 +140,21 @@ class TransactionManager(
         }
 
     fun getSolTransactionHex(
-        from: PublicKey,
-        destination: PublicKey,
+        from: String,
+        destination: String,
         amount: Long,
-        instructions: List<TransactionInstruction>,
         recentBlockHash: String
     ): Single<ByteArray> = Single.create { emitter ->
         try {
-            val transferInstruction = SystemProgram.transfer(from, destination, amount)
+            val fromPublicKey = PublicKey(from)
+            val destinationPublicKey = PublicKey(destination)
+            val transferInstruction = SystemProgram.transfer(fromPublicKey, destinationPublicKey, amount)
             val transaction = SolanaTransaction()
-
-            if (instructions.isNotEmpty()) {
-                transaction.add(*instructions.toTypedArray())
-            }
 
             transaction.add(transferInstruction)
 
             transaction.recentBlockhash = recentBlockHash
-            transaction.feePayer = from
-
+            transaction.feePayer = fromPublicKey
 
             if (!emitter.isDisposed) emitter.onSuccess(
                 transaction.serialize(
@@ -174,20 +170,25 @@ class TransactionManager(
     }
 
     fun getSplTransactionHex(
-        mintAddress: PublicKey,
-        fromPublicKey: PublicKey,
-        destinationAddress: PublicKey,
+        mintAddress: String,
+        from: String,
+        destinationAddress: String,
         amount: Long,
         recentBlockHash: String,
         allowUnfundedRecipient: Boolean = false
     ): Single<ByteArray> = Single.create { emitter ->
         ContResult { cb ->
+            val destinationPublicKey = PublicKey(destinationAddress)
+            val mintAddressObject = PublicKey(mintAddress)
             rpcAction.findSPLTokenDestinationAddress(
-                mintAddress,
-                destinationAddress,
+                mintAddressObject,
+                destinationPublicKey,
                 allowUnfundedRecipient
             ) { cb(it) }
         }.flatMap { spl ->
+            val fromPublicKey = PublicKey(from)
+            val destinationPublicKey = PublicKey(destinationAddress)
+            val mintAddressObject = PublicKey(mintAddress)
             val toPublicKey = spl.first
             val unregisteredAssociatedToken = spl.second
             if (fromPublicKey.toBase58() == toPublicKey.toBase58()) {
@@ -198,9 +199,9 @@ class TransactionManager(
             // create associated token address
             if (unregisteredAssociatedToken) {
                 val createATokenInstruction = AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
-                    mint = mintAddress,
+                    mint = mintAddressObject,
                     associatedAccount = toPublicKey,
-                    owner = destinationAddress,
+                    owner = destinationPublicKey,
                     payer = fromPublicKey
                 )
                 transaction.add(createATokenInstruction)

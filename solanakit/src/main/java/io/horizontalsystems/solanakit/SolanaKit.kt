@@ -7,8 +7,6 @@ import com.metaplex.lib.programs.token_metadata.accounts.MetadataAccountJsonAdap
 import com.metaplex.lib.programs.token_metadata.accounts.MetadataAccountRule
 import com.solana.actions.Action
 import com.solana.api.Api
-import com.solana.core.PublicKey
-import com.solana.core.TransactionInstruction
 import com.solana.networking.Network
 import com.solana.networking.NetworkingRouterConfig
 import com.solana.networking.OkHttpNetworkingRouter
@@ -17,7 +15,6 @@ import io.horizontalsystems.solanakit.core.ISyncListener
 import io.horizontalsystems.solanakit.core.SolanaDatabaseManager
 import io.horizontalsystems.solanakit.core.SyncManager
 import io.horizontalsystems.solanakit.core.TokenAccountManager
-import io.horizontalsystems.solanakit.core.hexToByteArray
 import io.horizontalsystems.solanakit.database.main.MainStorage
 import io.horizontalsystems.solanakit.database.transaction.TransactionStorage
 import io.horizontalsystems.solanakit.models.Address
@@ -130,25 +127,23 @@ class SolanaKit(
     }
 
     fun getSolTransactionHex(
-        from: PublicKey,
-        destination: PublicKey,
+        from: String,
+        destination: String,
         amount: Long,
-        instructions: List<TransactionInstruction>,
         recentBlockHash: String
     ): Single<ByteArray> {
         return transactionManager.getSolTransactionHex(
             from,
             destination,
             amount,
-            instructions,
             recentBlockHash
         )
     }
 
     fun getSplTransactionHex(
-        mintAddress: PublicKey,
-        fromPublicKey: PublicKey,
-        destinationAddress: PublicKey,
+        mintAddress: String,
+        fromPublicKey: String,
+        destinationAddress: String,
         amount: Long,
         recentBlockHash: String
     ): Single<ByteArray> {
