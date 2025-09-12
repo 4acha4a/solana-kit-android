@@ -1,6 +1,5 @@
 package io.horizontalsystems.solanakit.transactions
 
-import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,20 +14,20 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 
+const val SOL_TOKEN_ADDRESS: String = "So11111111111111111111111111111111111111111"
+
 class SolscanClient(
     auth: String,
     debug: Boolean
 ) {
-    val syncSourceName = "solscan.io"
     val solSyncSourceName = "solscan.io/solTransfers"
     val splSyncSourceName = "solscan.io/splTransfers"
     private val url = "https://pro-api.solscan.io/v2.0"
-    private val SOL_TOKEN_ADDRESS: String = "So11111111111111111111111111111111111111111"
 
     private val httpClient = httpClient(auth, debug)
 
     suspend fun solTransfers(account: String, lastSolTransferHash: String?): List<SolscanTransaction> {
-        val transactionsLimit = if (lastSolTransferHash != null) 5 else maxTransactionsLimit
+        val transactionsLimit = if (lastSolTransferHash != null) 10 else maxTransactionsLimit
         val solscanTxs = mutableListOf<SolscanTransaction>()
         var solscanTxsChunk: List<SolscanTransaction>
 
@@ -72,7 +71,7 @@ class SolscanClient(
 //    }
 
     suspend fun splTransfers(account: String, lastSplTransferHash: String?): List<SolscanTransaction> {
-        val transactionsLimit = if (lastSplTransferHash != null) 5 else maxTransactionsLimit
+        val transactionsLimit = if (lastSplTransferHash != null) 10 else maxTransactionsLimit
         val solscanTxs = mutableListOf<SolscanTransaction>()
         var solscanTxsChunk: List<SolscanTransaction>
 
