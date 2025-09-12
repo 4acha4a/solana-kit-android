@@ -175,7 +175,7 @@ class TransactionManager(
         destinationAddress: String,
         amount: Long,
         recentBlockHash: String,
-        allowUnfundedRecipient: Boolean = false
+        allowUnfundedRecipient: Boolean = true
     ): Single<ByteArray> = Single.create { emitter ->
         ContResult { cb ->
             val destinationPublicKey = PublicKey(destinationAddress)
