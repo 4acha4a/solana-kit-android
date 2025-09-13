@@ -1,6 +1,5 @@
 package io.horizontalsystems.solanakit.transactions
 
-import android.util.Log
 import com.metaplex.lib.programs.token_metadata.TokenMetadataProgram
 import com.metaplex.lib.programs.token_metadata.accounts.MetadataAccount
 import com.metaplex.lib.programs.token_metadata.accounts.MetaplexTokenStandard.FungibleAsset
@@ -95,8 +94,15 @@ class TransactionSyncer(
         try {
             val rpcSignatureInfos = getSignaturesFromRpcNode(lastTransactionHash)
             // Log.d("solana-kit", "rpcSignatureInfos: $rpcSignatureInfos")
-            val solTransfers = solscanClient.solTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.solSyncSourceName)?.hash)
-            val splTransfers = solscanClient.splTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.splSyncSourceName)?.hash)
+            val lastBlockTime = rpcSignatureInfos.firstOrNull()?.blockTime
+            if (lastBlockTime == null) {
+                syncState = SolanaKit.SyncState.Synced()
+                return
+            }
+            val solTransfers = solscanClient.solTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.solSyncSourceName)?.hash, lastBlockTime)
+            // Log.d("solana-kit", "solTransfers: $solTransfers")
+            val splTransfers = solscanClient.splTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.splSyncSourceName)?.hash, lastBlockTime)
+            // Log.d("solana-kit", "splTransfers: $splTransfers")
             val solscanExportedTxs = (solTransfers + splTransfers).sortedByDescending { it.blockTime }
             //val solscanExportedTxs = solscanClient.allTransfers(publicKey.toBase58(), lastTransactionHash)
             val mintAddresses = solscanExportedTxs.mapNotNull { it.mintAccountAddress }.toSet().toList()
