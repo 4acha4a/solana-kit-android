@@ -145,6 +145,7 @@ class SolanaKit(
         fromPublicKey: String,
         destinationAddress: String,
         amount: Long,
+        decimals: Int,
         recentBlockHash: String
     ): Single<ByteArray> {
         return transactionManager.getSplTransactionHex(
@@ -152,6 +153,7 @@ class SolanaKit(
             fromPublicKey,
             destinationAddress,
             amount,
+            decimals,
             recentBlockHash
         )
     }

@@ -174,6 +174,7 @@ class TransactionManager(
         from: String,
         destinationAddress: String,
         amount: Long,
+        decimals: Int = 9,
         recentBlockHash: String,
         allowUnfundedRecipient: Boolean = true
     ): Single<ByteArray> = Single.create { emitter ->
@@ -211,11 +212,13 @@ class TransactionManager(
             }
 
             tx.add(
-                TokenProgram.transfer(
+                TokenProgram.transferChecked(
                     source = fromTokenAccount,
                     destination = toTokenAccount,
                     amount = amount,
-                    owner = fromOwner
+                    decimals = decimals.toByte(),
+                    owner = fromOwner,
+                    tokenMint = mint
                 )
             )
 
