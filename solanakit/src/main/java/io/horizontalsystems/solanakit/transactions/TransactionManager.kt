@@ -178,55 +178,63 @@ class TransactionManager(
         allowUnfundedRecipient: Boolean = true
     ): Single<ByteArray> = Single.create { emitter ->
         ContResult { cb ->
-            val destinationPublicKey = PublicKey(destinationAddress)
-            val mintAddressObject = PublicKey(mintAddress)
-            rpcAction.findSPLTokenDestinationAddress(
-                mintAddressObject,
-                destinationPublicKey,
-                allowUnfundedRecipient
-            ) { cb(it) }
-        }.flatMap { spl ->
-            val fromPublicKey = PublicKey(from)
-            val destinationPublicKey = PublicKey(destinationAddress)
-            val mintAddressObject = PublicKey(mintAddress)
-            val toPublicKey = spl.first
-            val unregisteredAssociatedToken = spl.second
-            if (fromPublicKey.toBase58() == toPublicKey.toBase58()) {
+            val mint = PublicKey(mintAddress)
+            val fromOwner = PublicKey(from)
+            rpcAction.findSPLTokenDestinationAddress(mint, fromOwner, allowUnfundedRecipient) { cb(it) }
+        }.flatMap { fromSpl ->
+            ContResult { cb ->
+                val mint = PublicKey(mintAddress)
+                val destinationOwner = PublicKey(destinationAddress)
+                rpcAction.findSPLTokenDestinationAddress(mint, destinationOwner, allowUnfundedRecipient) { cb(it) }
+            }.map { toSpl ->
+                Triple(fromSpl.first, toSpl.first, toSpl.second)
+            }
+        }.flatMap { (fromTokenAccount, toTokenAccount, toUnregistered) ->
+            val fromOwner = PublicKey(from)
+            val destinationOwner = PublicKey(destinationAddress)
+            if (fromOwner.toBase58() == destinationOwner.toBase58()) {
                 return@flatMap ContResult.failure(ResultError("Same send and destination address."))
             }
-            val transaction = SolanaTransaction()
 
-            // create associated token address
-            if (unregisteredAssociatedToken) {
-                val createATokenInstruction = AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
-                    mint = mintAddressObject,
-                    associatedAccount = toPublicKey,
-                    owner = destinationPublicKey,
-                    payer = fromPublicKey
+            val mint = PublicKey(mintAddress)
+            val tx = SolanaTransaction()
+
+            if (toUnregistered) {
+                tx.add(
+                    AssociatedTokenProgram.createAssociatedTokenAccountInstruction(
+                        mint = mint,
+                        associatedAccount = toTokenAccount,
+                        owner = destinationOwner,
+                        payer = fromOwner
+                    )
                 )
-                transaction.add(createATokenInstruction)
             }
 
-            // send instruction
-            val sendInstruction = TokenProgram.transfer(fromPublicKey, toPublicKey, amount, fromPublicKey)
-            transaction.add(sendInstruction)
+            tx.add(
+                TokenProgram.transfer(
+                    source = fromTokenAccount,
+                    destination = toTokenAccount,
+                    amount = amount,
+                    owner = fromOwner
+                )
+            )
 
-            transaction.recentBlockhash = recentBlockHash
-            transaction.feePayer = fromPublicKey
+            tx.recentBlockhash = recentBlockHash
+            tx.feePayer = fromOwner
 
-            return@flatMap ContResult.success(transaction)
+            ContResult.success(tx)
         }.run { result ->
-            result.onSuccess {
+            result.onSuccess { tx ->
                 emitter.onSuccess(
-                    it.serialize(
+                    tx.serialize(
                         SerializeConfig(
                             requireAllSignatures = false,
                             verifySignatures = false
                         )
                     )
                 )
-            }.onFailure {
-                emitter.onError(it)
+            }.onFailure { e ->
+                emitter.onError(e)
             }
         }
     }
