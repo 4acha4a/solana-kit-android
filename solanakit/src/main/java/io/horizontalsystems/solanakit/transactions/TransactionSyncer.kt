@@ -69,40 +69,40 @@ class TransactionSyncer(
         val lastTransactionHash = storage.lastNonPendingTransaction()?.hash
 
         try {
-            Log.d("solana-kit", "TransactionSyncer: syncing from last hash: $lastTransactionHash")
+            // Log.d("solana-kit", "TransactionSyncer: syncing from last hash: $lastTransactionHash")
             val rpcSignatureInfos = getSignaturesFromRpcNode(lastTransactionHash)
-            Log.d("solana-kit", "rpcSignatureInfos: $rpcSignatureInfos")
+            // Log.d("solana-kit", "rpcSignatureInfos: $rpcSignatureInfos")
             val lastBlockTime = rpcSignatureInfos.lastOrNull()?.blockTime
             if (lastBlockTime == null) {
                 syncState = SolanaKit.SyncState.Synced()
                 return
             }
 //            val solTransfers = solscanClient.solTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.solSyncSourceName)?.hash, lastBlockTime)
-//            Log.d("solana-kit", "solTransfers: $solTransfers")
+//            // Log.d("solana-kit", "solTransfers: $solTransfers")
 //            val splTransfers = solscanClient.splTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.splSyncSourceName)?.hash, lastBlockTime)
-//            Log.d("solana-kit", "splTransfers: $splTransfers")
+//            // Log.d("solana-kit", "splTransfers: $splTransfers")
 //            val solscanExportedTxs = (solTransfers + splTransfers).sortedByDescending { it.blockTime }
             val solscanExportedTxs = solscanClient.allTransfers(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.syncSourceName)?.hash, lastBlockTime)
-            Log.d("solana-kit", "solscanExportedTxs: $solscanExportedTxs")
+            // Log.d("solana-kit", "solscanExportedTxs: $solscanExportedTxs")
 
             val balanceChangeActivities = solscanClient.allBalanceChangeActivities(publicKey.toBase58(), storage.getSyncedBlockTime(solscanClient.syncSourceName)?.hash, 0)
-            Log.d("solana-kit", "balanceChangeActivities: $balanceChangeActivities")
+            // Log.d("solana-kit", "balanceChangeActivities: $balanceChangeActivities")
 
             val mintAddresses = solscanExportedTxs.mapNotNull { it.mintAccountAddress }.toSet().toList()
-            Log.d("solana-kit", "mintAddresses: $mintAddresses")
+            // Log.d("solana-kit", "mintAddresses: $mintAddresses")
 
             val mintAccounts = getMintAccounts(mintAddresses)
-            Log.d("solana-kit", "mintAccounts: $mintAccounts")
+            // Log.d("solana-kit", "mintAccounts: $mintAccounts")
 
             val tokenAccounts = buildTokenAccounts(solscanExportedTxs, mintAccounts)
-            Log.d("solana-kit", "tokenAccounts: $tokenAccounts")
+            // Log.d("solana-kit", "tokenAccounts: $tokenAccounts")
 
             val transactions = merge(rpcSignatureInfos, solscanExportedTxs, mintAccounts, balanceChangeActivities)
-            Log.d("solana-kit", "transactions: $transactions")
+            // Log.d("solana-kit", "transactions: $transactions")
 
             transactionManager.handle(transactions, tokenAccounts)
 
-            Log.d("solana-kit", "TransactionSyncer: ${transactions.size} transactions, ${tokenAccounts.size} token accounts")
+            // Log.d("solana-kit", "TransactionSyncer: ${transactions.size} transactions, ${tokenAccounts.size} token accounts")
 //
 //            if (solTransfers.isNotEmpty()) {
 //                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.solSyncSourceName, solTransfers.first().hash))
@@ -112,7 +112,7 @@ class TransactionSyncer(
 //                storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.splSyncSourceName, splTransfers.first().hash))
 //            }
 
-            Log.d("solana-kit", "TransactionSyncer: sync completed")
+            // Log.d("solana-kit", "TransactionSyncer: sync completed")
 //
             if (solscanExportedTxs.isNotEmpty()) {
                 storage.setSyncedBlockTime(LastSyncedTransaction(solscanClient.syncSourceName, solscanExportedTxs.first().hash))
@@ -120,7 +120,7 @@ class TransactionSyncer(
 
             syncState = SolanaKit.SyncState.Synced()
         } catch (exception: Throwable) {
-            Log.e("solana-kit", "TransactionSyncer: sync failed: ${exception.message}")
+            // Log.e("solana-kit", "TransactionSyncer: sync failed: ${exception.message}")
             syncState = SolanaKit.SyncState.NotSynced(exception)
         }
     }
@@ -134,7 +134,7 @@ class TransactionSyncer(
             transactionObjects.add(transactionInfo!!)
         }
 
-        Log.d("solana-kit", "Total transactions fetched: ${transactionObjects.size}")
+        // Log.d("solana-kit", "Total transactions fetched: ${transactionObjects.size}")
 
         return transactionObjects
     }
@@ -142,12 +142,12 @@ class TransactionSyncer(
     private suspend fun getTransactionChunk(signature: String) = suspendCoroutine { continuation ->
         rpcClient.getTransaction(signature) { result ->
             result.onSuccess { transactionObject ->
-                Log.d("solana-kit", "Transaction: $transactionObject")
+                // Log.d("solana-kit", "Transaction: $transactionObject")
                 continuation.resume(transactionObject)
             }
 
             result.onFailure { exception ->
-                Log.e("solana-kit", "Error fetching transaction", exception)
+                // Log.e("solana-kit", "Error fetching transaction", exception)
                 continuation.resumeWithException(exception)
             }
         }
@@ -158,7 +158,7 @@ class TransactionSyncer(
                       mintAccounts: Map<String, MintAccount>,
                       balanceChangeActivities: List<BalanceChangeActivity>): List<FullTransaction> {
         val transactions = mutableMapOf<String, FullTransaction>()
-        Log.d("solana-kit", "Merging ${rpcSignatureInfos.size} RPC signatures with ${solscanTxsMap.size} Solscan transactions")
+        // Log.d("solana-kit", "Merging ${rpcSignatureInfos.size} RPC signatures with ${solscanTxsMap.size} Solscan transactions")
 
         for (signatureInfo in rpcSignatureInfos) {
             signatureInfo.blockTime?.let { blockTime ->
@@ -166,18 +166,18 @@ class TransactionSyncer(
                 transactions[signatureInfo.signature] = FullTransaction(transaction, listOf())
             }
         }
-        Log.d("solana-kit", "After adding RPC signatures, transactions count: ${transactions.size}")
+        // Log.d("solana-kit", "After adding RPC signatures, transactions count: ${transactions.size}")
 
-        Log.d("solana-kit", "Grouping Solscan transactions by hash: ${solscanTxsMap.size} transactions")
+        // Log.d("solana-kit", "Grouping Solscan transactions by hash: ${solscanTxsMap.size} transactions")
         for ((hash, solscanTxs) in solscanTxsMap.groupBy { it.hash }) {
-            Log.d("solana-kit", "Merging transaction for hash: $hash")
+            // Log.d("solana-kit", "Merging transaction for hash: $hash")
             try {
                 val existingTransaction = transactions[hash]?.transaction
                 val solscanTx = solscanTxs.first()
                 val balanceChange =
                     balanceChangeActivities.firstOrNull { it.transId == hash && (it.tokenAddress == solscanTx.mintAccountAddress || (solscanTx.mintAccountAddress == null && it.tokenAddress == SOL_TOKEN_ADDRESS)) }
                 if (balanceChange == null) {
-                    Log.d("solana-kit", "No matching balance change activity found for transaction hash: $hash, skipping...")
+                    // Log.d("solana-kit", "No matching balance change activity found for transaction hash: $hash, skipping...")
                     continue
                 }
                 val mergedTransaction = Transaction(
@@ -203,7 +203,7 @@ class TransactionSyncer(
                 }
 
                 transactions[hash] = FullTransaction(mergedTransaction, tokenTransfers)
-                Log.d("solana-kit", "Merged transaction: ${transactions[hash]}")
+                // Log.d("solana-kit", "Merged transaction: ${transactions[hash]}")
             } catch (e: Throwable) {
                 continue
             }
@@ -223,7 +223,7 @@ class TransactionSyncer(
 
         } while (signatureObjectsChunk.size == rpcSignaturesCount)
 
-        Log.d("solana-kit", "Total signatures fetched: ${signatureObjects.size}")
+        // Log.d("solana-kit", "Total signatures fetched: ${signatureObjects.size}")
 
         return signatureObjects
     }
@@ -231,12 +231,12 @@ class TransactionSyncer(
     private suspend fun getSignaturesChunk(lastTransactionHash: String?, before: String? = null) = suspendCoroutine<List<SignatureInfo>> { continuation ->
         rpcClient.getSignaturesForAddress(publicKey, until = lastTransactionHash, before = before, limit = rpcSignaturesCount) { result ->
             result.onSuccess { signatureObjects ->
-                Log.d("solana-kit", "Signatures: $signatureObjects")
+                // Log.d("solana-kit", "Signatures: $signatureObjects")
                 continuation.resume(signatureObjects)
             }
 
             result.onFailure { exception ->
-                Log.e("solana-kit", "Error fetching signatures", exception)
+                // Log.e("solana-kit", "Error fetching signatures", exception)
                 continuation.resumeWithException(exception)
             }
         }
@@ -252,18 +252,18 @@ class TransactionSyncer(
         val mintAccountData = suspendCoroutine<List<BufferInfo<Mint>?>> { continuation ->
             rpcClient.getMultipleAccounts(publicKeys, Mint::class.java) { result ->
                 result.onSuccess {
-                    Log.d("solana-kit", "Fetched ${it.size} mint accounts")
+                    // Log.d("solana-kit", "Fetched ${it.size} mint accounts")
                     continuation.resume(it)
                 }
 
                 result.onFailure { exception ->
-                    Log.d("solana-kit", "Error fetching mint accounts", exception)
+                    // Log.d("solana-kit", "Error fetching mint accounts", exception)
                     continuation.resumeWithException(exception)
                 }
             }
         }
 
-        Log.d("solana-kit", "Fetched ${mintAccountData.size} mint accounts")
+        // Log.d("solana-kit", "Fetched ${mintAccountData.size} mint accounts")
 
         val metadataAccountsMap = mutableMapOf<String, MetadataAccount>()
         nftClient.findAllByMintList(publicKeys).getOrThrow()

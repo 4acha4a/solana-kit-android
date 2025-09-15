@@ -37,24 +37,24 @@ class SolscanClient(
 //        do {
 //            solscanTxsChunk = solTransfersChunk(account, transactionsLimit, page, lastBlockTime)
 //
-//            // Log.d("SolscanClient", "Fetched ${solscanTxsChunk.size} SOL transfer transactions on page $page")
+//            // // Log.d("SolscanClient", "Fetched ${solscanTxsChunk.size} SOL transfer transactions on page $page")
 //
 //            val index = lastSolTransferHash?.let { solscanTxsChunk.indexOfFirst { it.hash == lastSolTransferHash } }
 //
-//            // Log.d("SolscanClient", "Index of last known transaction ($lastSolTransferHash): $index")
+//            // // Log.d("SolscanClient", "Index of last known transaction ($lastSolTransferHash): $index")
 //
 //            if (lastSolTransferHash != null && index != null && index >= 0) {
-//                // Log.d("SolscanClient", "Found last known transaction. Stopping fetch.")
+//                // // Log.d("SolscanClient", "Found last known transaction. Stopping fetch.")
 //                solscanTxs.addAll(solscanTxsChunk.subList(0, index))
 //                break
 //            } else {
-//                // Log.d("SolscanClient", "Last known transaction not found in this chunk. Continuing fetch.")
+//                // // Log.d("SolscanClient", "Last known transaction not found in this chunk. Continuing fetch.")
 //                solscanTxs.addAll(solscanTxsChunk)
 //            }
 //            page += 1
 //        } while (solscanTxsChunk.size == transactionsLimit && page < maxPagesSynced)
 //
-//        // Log.d("SolscanClient", "Total SOL transfer transactions fetched: ${solscanTxs.size}")
+//        // // Log.d("SolscanClient", "Total SOL transfer transactions fetched: ${solscanTxs.size}")
 //
 //        return solscanTxs
 //    }
@@ -68,17 +68,17 @@ class SolscanClient(
         do {
             solscanTxsChunk = allTransfersChunk(account, transactionsLimit, page, lastBlockTime)
 
-            // Log.d("SolscanClient", "Fetched ${solscanTxsChunk.size} SPL transfer transactions on page $page")
+            // // Log.d("SolscanClient", "Fetched ${solscanTxsChunk.size} SPL transfer transactions on page $page")
 
             val index = lastTransactionHash?.let { solscanTxsChunk.indexOfFirst { it.hash == lastTransactionHash } }
 
-            // Log.d("SolscanClient", "Index of last known transaction ($lastSplTransferHash): $index")
+            // // Log.d("SolscanClient", "Index of last known transaction ($lastSplTransferHash): $index")
             if (lastTransactionHash != null && index != null && index >= 0) {
-                // Log.d("SolscanClient", "Found last known transaction. Stopping fetch.")
+                // // Log.d("SolscanClient", "Found last known transaction. Stopping fetch.")
                 solscanTxs.addAll(solscanTxsChunk.subList(0, index))
                 break
             } else {
-                // Log.d("SolscanClient", "Last known transaction not found in this chunk. Continuing fetch.")
+                // // Log.d("SolscanClient", "Last known transaction not found in this chunk. Continuing fetch.")
                 solscanTxs.addAll(solscanTxsChunk)
             }
             page += 1
@@ -97,17 +97,17 @@ class SolscanClient(
 //        do {
 //            solscanTxsChunk = splTransfersChunk(account, transactionsLimit, page, lastBlockTime)
 //
-//            // Log.d("SolscanClient", "Fetched ${solscanTxsChunk.size} SPL transfer transactions on page $page")
+//            // // Log.d("SolscanClient", "Fetched ${solscanTxsChunk.size} SPL transfer transactions on page $page")
 //
 //            val index = lastSplTransferHash?.let { solscanTxsChunk.indexOfFirst { it.hash == lastSplTransferHash } }
 //
-//            // Log.d("SolscanClient", "Index of last known transaction ($lastSplTransferHash): $index")
+//            // // Log.d("SolscanClient", "Index of last known transaction ($lastSplTransferHash): $index")
 //            if (lastSplTransferHash != null && index != null && index >= 0) {
-//                // Log.d("SolscanClient", "Found last known transaction. Stopping fetch.")
+//                // // Log.d("SolscanClient", "Found last known transaction. Stopping fetch.")
 //                solscanTxs.addAll(solscanTxsChunk.subList(0, index))
 //                break
 //            } else {
-//                // Log.d("SolscanClient", "Last known transaction not found in this chunk. Continuing fetch.")
+//                // // Log.d("SolscanClient", "Last known transaction not found in this chunk. Continuing fetch.")
 //                solscanTxs.addAll(solscanTxsChunk)
 //            }
 //            page += 1
@@ -125,24 +125,24 @@ class SolscanClient(
         do {
             balanceChangeActivitiesChunk = allBalanceChangeActivitiesChunk(account, transactionsLimit, page, lastBlockTime)
 
-            Log.d("SolscanClient", "Fetched ${balanceChangeActivitiesChunk.size} balance change activities on page $page")
+            // Log.d("SolscanClient", "Fetched ${balanceChangeActivitiesChunk.size} balance change activities on page $page")
 
             val index = lastTransferHash?.let { balanceChangeActivitiesChunk.indexOfFirst { it.transId == lastTransferHash } }
 
-            Log.d("SolscanClient", "Index of last known balance change activity ($lastTransferHash): $index")
+            // Log.d("SolscanClient", "Index of last known balance change activity ($lastTransferHash): $index")
 
             if (lastTransferHash != null && index != null && index >= 0) {
                 balanceChangeActivities.addAll(balanceChangeActivitiesChunk.subList(0, index))
-                Log.d("SolscanClient", "Found last known balance change activity. Stopping fetch.")
+                // Log.d("SolscanClient", "Found last known balance change activity. Stopping fetch.")
                 break
             } else {
                 balanceChangeActivities.addAll(balanceChangeActivitiesChunk)
-                Log.d("SolscanClient", "Last known balance change activity not found in this chunk. Continuing fetch.")
+                // Log.d("SolscanClient", "Last known balance change activity not found in this chunk. Continuing fetch.")
             }
             page += 1
         } while (balanceChangeActivitiesChunk.size == transactionsLimit && page < maxPagesSynced)
 
-        Log.d("SolscanClient", "Total balance change activities fetched: ${balanceChangeActivities.size}")
+        // Log.d("SolscanClient", "Total balance change activities fetched: ${balanceChangeActivities.size}")
 
         return balanceChangeActivities
     }
@@ -159,7 +159,7 @@ class SolscanClient(
 
                 val balanceChangeActivities = mutableListOf<BalanceChangeActivity>()
 
-                Log.d("SolscanClient", "Fetched ${balanceTxObjects.length()} balance change records")
+                // Log.d("SolscanClient", "Fetched ${balanceTxObjects.length()} balance change records")
 
                 for (i in 0 until balanceTxObjects.length()) {
                     val balanceObject: JSONObject = balanceTxObjects.getJSONObject(i)
@@ -178,7 +178,7 @@ class SolscanClient(
                             tokenAddress = tokenAddress
                         )
                     )
-                    Log.d("SolscanClient", "Added balance change activity: ${balanceChangeActivities.last()}")
+                    // Log.d("SolscanClient", "Added balance change activity: ${balanceChangeActivities.last()}")
                 }
                 continuation.resume(balanceChangeActivities)
 
@@ -192,12 +192,12 @@ class SolscanClient(
         val path = "/account/transfer?address=$account&activity_type[]=ACTIVITY_SPL_TRANSFER&page=$page&page_size=$limit&from_time=$lastBlockTime"
         val request: Request = Request.Builder().url(url + path).build()
 
-        // Log.d("SolscanClient", "Fetching SOL transfers: $path")
+        // // Log.d("SolscanClient", "Fetching SOL transfers: $path")
 
 //        val balanceRequestPath = "/account/balance_change?address=$account&page=$page&page_size=$limit"
 //        val balanceRequest: Request = Request.Builder().url(url + balanceRequestPath).build()
 
-        // Log.d("SolscanClient", "Fetching balance changes: $balanceRequestPath")
+        // // Log.d("SolscanClient", "Fetching balance changes: $balanceRequestPath")
 
         return suspendCoroutine { continuation ->
             try {
@@ -209,12 +209,12 @@ class SolscanClient(
 //                val balanceResultObject = JSONObject(getBalanceInfoBody.string())
 //                val balanceTxObjects: JSONArray = balanceResultObject.getJSONArray("data")
 
-                // Log.d("SolscanClient", "Fetched ${txObjects.length()} SOL transfer records and ${balanceTxObjects.length()} balance change records")
+                // // Log.d("SolscanClient", "Fetched ${txObjects.length()} SOL transfer records and ${balanceTxObjects.length()} balance change records")
 
                 val transactions = mutableListOf<SolscanTransaction>()
                 for (i in 0 until txObjects.length()) {
                     val txObject: JSONObject = txObjects.getJSONObject(i)
-                    Log.d("SolscanClient", "Processing transaction: $txObject")
+                    // Log.d("SolscanClient", "Processing transaction: $txObject")
                     val transId = txObject.getString("trans_id")
                     val tokenAddress = txObject.getString("token_address")
 
@@ -252,7 +252,7 @@ class SolscanClient(
                             )
                         }
                     }
-                    // Log.d("SolscanClient", "Added SOL transfer transaction: ${transactions.last()}")
+                    // // Log.d("SolscanClient", "Added SOL transfer transaction: ${transactions.last()}")
                 }
 
                 continuation.resume(transactions)
@@ -267,12 +267,12 @@ class SolscanClient(
 //        val path = "/account/transfer?address=$account&activity_type[]=ACTIVITY_SPL_TRANSFER&page=$page&page_size=$limit&token=$SOL_TOKEN_ADDRESS&from_time=$lastBlockTime"
 //        val request: Request = Request.Builder().url(url + path).build()
 //
-//        // Log.d("SolscanClient", "Fetching SOL transfers: $path")
+//        // // Log.d("SolscanClient", "Fetching SOL transfers: $path")
 //
 //        val balanceRequestPath = "/account/balance_change?address=$account&page=$page&page_size=$limit&from_time=$lastBlockTime"
 //        val balanceRequest: Request = Request.Builder().url(url + balanceRequestPath).build()
 //
-//        // Log.d("SolscanClient", "Fetching balance changes: $balanceRequestPath")
+//        // // Log.d("SolscanClient", "Fetching balance changes: $balanceRequestPath")
 //
 //        return suspendCoroutine { continuation ->
 //            try {
@@ -284,7 +284,7 @@ class SolscanClient(
 //                val balanceResultObject = JSONObject(getBalanceInfoBody.string())
 //                val balanceTxObjects: JSONArray = balanceResultObject.getJSONArray("data")
 //
-//                // Log.d("SolscanClient", "Fetched ${txObjects.length()} SOL transfer records and ${balanceTxObjects.length()} balance change records")
+//                // // Log.d("SolscanClient", "Fetched ${txObjects.length()} SOL transfer records and ${balanceTxObjects.length()} balance change records")
 //
 //                val transactions = mutableListOf<SolscanTransaction>()
 //                for (i in 0 until txObjects.length()) {
@@ -302,7 +302,7 @@ class SolscanClient(
 //                            solAmount = txObject.getLong("amount")
 //                        )
 //                    )
-//                    // Log.d("SolscanClient", "Added SOL transfer transaction: ${transactions.last()}")
+//                    // // Log.d("SolscanClient", "Added SOL transfer transaction: ${transactions.last()}")
 //                }
 //
 //                continuation.resume(transactions)
@@ -328,7 +328,7 @@ class SolscanClient(
 //                val txObjects: JSONArray = resultObject.getJSONArray("data")
 //                val balanceTxObjects: JSONArray = balanceResultObject.getJSONArray("data")
 //
-//                // Log.d("SolscanClient", "Fetched ${txObjects.length()} SPL transfer records and ${balanceTxObjects.length()} balance change records")
+//                // // Log.d("SolscanClient", "Fetched ${txObjects.length()} SPL transfer records and ${balanceTxObjects.length()} balance change records")
 //
 //                val transactions = mutableListOf<SolscanTransaction>()
 //                for (i in 0 until txObjects.length()) {
@@ -336,7 +336,7 @@ class SolscanClient(
 //                    if (txObject.getString("token_address") == SOL_TOKEN_ADDRESS) {
 //                        continue
 //                    }
-//                    // Log.d("SolscanClient", "Processing transaction: $txObject")
+//                    // // Log.d("SolscanClient", "Processing transaction: $txObject")
 //                    val transId = txObject.getString("trans_id")
 //                    val tokenAddress = txObject.getString("token_address")
 //
@@ -346,7 +346,7 @@ class SolscanClient(
 //                    } else {
 //                        "from_token_account"
 //                    }
-//                    // Log.d("SolscanClient", "Using key '$key' for token account address")
+//                    // // Log.d("SolscanClient", "Using key '$key' for token account address")
 //                    transactions.add(
 //                        // SPL transfer
 //                        SolscanTransaction(
@@ -360,9 +360,9 @@ class SolscanClient(
 //                            splBalanceChange = balanceChange.toString()
 //                        )
 //                    )
-//                    // Log.d("SolscanClient", "Added SPL transfer transaction: ${transactions.last()}")
+//                    // // Log.d("SolscanClient", "Added SPL transfer transaction: ${transactions.last()}")
 //                }
-//                // Log.d("SolscanClient", "Total SPL transfer transactions parsed: ${transactions.size}")
+//                // // Log.d("SolscanClient", "Total SPL transfer transactions parsed: ${transactions.size}")
 //                continuation.resume(transactions)
 //            } catch (e: IOException) {
 //                continuation.resumeWithException(RuntimeException(e))
