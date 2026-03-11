@@ -14,7 +14,7 @@ data class Transaction(
     val to: String? = null,
     val amount: BigDecimal? = null,
     val error: String? = null,
-    val pending: Boolean = true,
+    val pending: Boolean = false,
     val blockHash: String = "",
     val lastValidBlockHeight: Long = 0,
     val base64Encoded: String = "",
