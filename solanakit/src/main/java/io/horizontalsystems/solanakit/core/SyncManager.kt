@@ -57,7 +57,11 @@ class SyncManager(
 
         scope.launch {
             transactionManager.transactionsFlow
-                .collect { balanceSyncer.sync() }
+                .collect {
+                    balanceSyncer.sync()
+                    tokenAccountSyncer.sync()
+                    transactionSyncer.sync()
+                }
         }
     }
 
@@ -65,11 +69,10 @@ class SyncManager(
         if (apiSyncer.state !is SyncerState.Ready) {
             apiSyncer.stop()
             apiSyncer.start(scope)
-        } else {
-            balanceSyncer.sync()
-            tokenAccountSyncer.sync()
-            transactionSyncer.sync()
         }
+        balanceSyncer.sync()
+        tokenAccountSyncer.sync()
+        transactionSyncer.sync()
     }
 
     fun stop() {
